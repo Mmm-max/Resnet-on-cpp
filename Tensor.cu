@@ -1,6 +1,7 @@
 #include "Tensor.hpp"
 #include <iostream>
 #include <cstdio>
+#include <algorithm>
 
 #define CHECK_CUDA(call) \
 { \
@@ -42,9 +43,26 @@ size_t Tensor::getSize() const {
 }
 
 DeviceType Tensor::getDeviceType() const {
-    return deviceType;
+    return device_;
 }
 
 float* Tensor::data() {
     return data_ptr;
 }
+
+void Tensor::toDevice(const float* src) {
+    if (device_ == DeviceType::CPU) {
+        std::copy(src, src + size_, data_ptr);
+    } else if (device_ == DeviceType::GPU) {
+        CHECK_CUDA(cudaMemcpy(data_ptr, src, size_ * sizeof(float), cudaMemcpyHostToDevice));
+    }
+}
+
+void Tensor::toHost(float* dst) const {
+    if (device_ == DeviceType::CPU) {
+        std::copy(data_ptr, data_ptr + size_, dst);
+    } else if (device_ == DeviceType::GPU) {
+        CHECK_CUDA(cudaMemcpy(dst, data_ptr, size_ * sizeof(float), cudaMemcpyDeviceToHost));
+    }
+}
+
