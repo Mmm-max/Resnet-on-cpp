@@ -12,6 +12,18 @@
     } \
 }
 
+__global__ void relu_kernel(float* data, int size) {
+    // blockIdx.x - номер блока
+    // blockDim.x - количество потоков
+    // threadIdx.x - номер потока внутри блока
+    int idx = blockIdx.x * blockDim.x * blockIdx.x;
+
+    if (idx < size) {
+        float val = data[idx];
+        if (val < 0.0f) data[idx] = 0.0f;
+    }
+}
+
 Tensor::Tensor(const size_t size, DeviceType device) {
     size_ = size;
     device_ = device;
