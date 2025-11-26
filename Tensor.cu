@@ -42,6 +42,38 @@ __global__ void matmul_kernel(float* A, float* B, float* C, int M, int N, int K)
     }
 }
 
+__global__ void conv2d_kernel_3x3(float* I, float* W, float* O,
+                                  int C_in, int C_out, int H, int Width) {
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+
+    int out_ch = blockIdx.z;
+
+    if (row < H &&  col < Width && out_ch < C_out) {
+        float sum = 0.0f;
+        // проходим по каждому каналу
+        for (int in_ch = 0; in_ch < C_in; ++in_ch) {
+            // перебераем окноо 3x3 от -1 до 1
+            for (int i = -1; i <= 1; ++i) {
+                for (int j = -1; j <= 1; ++j) {
+                    int current_row = row + i;
+                    int current_col = col + j;
+
+                    // padding = 1
+                    if (current_row >= 0 && current_row < H &&
+                        current_col >= 0 && current_col < Width) {
+                            int input_idx = (in_ch * H + current_row) * Width + current_col;
+                            int weight_idx = ((out_ch * C_in + in_ch) * 3 + (i + 1)) * 3  + (j + 1);
+                            sum += I[input_idx] * W[weight_idx];
+                        }
+                }
+            }
+        }
+        int output_idx = (out_ch * H + row) * Width + col;
+        O[output_idx] = sum;
+    }
+}
+
 Tensor::Tensor(size_t rows, size_t cols, DeviceType device) {
     rows_ = rows;
     cols_ = cols;
@@ -71,7 +103,7 @@ Tensor::~Tensor() {
 }
 
 
-size_t Tensor::getCols() const {
+size_t Tensor::getCols() const  {
     return cols_;
 }
 
@@ -165,3 +197,31 @@ void Tensor::relu() {
     }
 }
 
+
+Tensor* Tensor::conv2d(const Tensor& weights, int in_channels, int out_channels,
+                    int height, int width) {
+    size_t out_size = out_channels * height * width;
+    // NOTE: заглушка для трехмерного вектора
+    Tensor* Output = new Tensor(out_size, 1, DeviceType::GPU);
+
+    dim3 threadsPerBlock(16, 16); // пикселей в блоке
+    dim3 blocksPerGrid(
+        (width + threadsPerBlock.x - 1) / threadsPerBlock.x,
+        (height + threadsPerBlock.y - 1) / threadsPerBlock.y,
+        out_channels
+    );
+
+    std::cout << "Launching Conv2D 3x3..." << std::endl;
+
+    conv2d_kernel_3x3<<<blocksPerGrid, threadsPerBlock>>>(
+        data_ptr,
+        weights.getDataPtr(),
+        Output->getDataPtr(),
+        in_channels, out_channels, height, width
+    );
+
+    CHECK_CUDA(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaGetLastError());
+
+    return Output;
+}

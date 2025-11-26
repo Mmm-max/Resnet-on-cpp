@@ -34,6 +34,8 @@ class Tensor {
         Tensor* matmul(const Tensor& other);
         // relu
         void relu();
+        // conv2d
+        Tensor* conv2d(const Tensor& weights, int in_channels, int out_channels, int height, int width);
 };
 
 #endif
