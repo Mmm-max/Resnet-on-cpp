@@ -25,6 +25,9 @@ class Tensor {
         void toDevice(const float* src);
 
         void toHost(float* dst) const;
+
+        // relu
+        void relu();
 };
 
 #endif

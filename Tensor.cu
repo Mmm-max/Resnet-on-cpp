@@ -16,11 +16,13 @@ __global__ void relu_kernel(float* data, int size) {
     // blockIdx.x - номер блока
     // blockDim.x - количество потоков
     // threadIdx.x - номер потока внутри блока
-    int idx = blockIdx.x * blockDim.x * blockIdx.x;
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx < size) {
         float val = data[idx];
-        if (val < 0.0f) data[idx] = 0.0f;
+        if (val < 0.0f) {
+            data[idx] = 0.0f;
+        }
     }
 }
 
@@ -43,6 +45,7 @@ Tensor::~Tensor() {
             std::cout << "Freeing CPU memory" << std::endl;
             delete[] data_ptr;
         } else if (device_ == DeviceType::GPU) {
+            std::cout << "Freeing GPU memory" << std::endl;
             CHECK_CUDA(cudaFree(data_ptr));
         }
         data_ptr = nullptr;
@@ -75,6 +78,26 @@ void Tensor::toHost(float* dst) const {
         std::copy(data_ptr, data_ptr + size_, dst);
     } else if (device_ == DeviceType::GPU) {
         CHECK_CUDA(cudaMemcpy(dst, data_ptr, size_ * sizeof(float), cudaMemcpyDeviceToHost));
+    }
+}
+
+void Tensor::relu() {
+    if (device_ == DeviceType::CPU){
+        for (size_t i = 0; i < size_; ++i) {
+            // std::cout << "relu, ind: " << i << " val: " << data_ptr[i] << std::endl;
+            if (data_ptr[i] < 0.0f) {
+                // std::cout << "relu lower val!! " << data_ptr[i] << std::endl;
+                data_ptr[i] = 0.0f;
+            }
+        }
+    } else if (device_ == DeviceType::GPU) {
+        std::cout << "GPU relu launching..." << std::endl;
+        int threadsPerBlock = 256;
+        int blocksPerGrid = (size_ + threadsPerBlock - 1) / threadsPerBlock;
+
+        relu_kernel<<<blocksPerGrid, threadsPerBlock>>>(data_ptr, size_);
+        CHECK_CUDA(cudaDeviceSynchronize()); // ожидание всех ядер
+        CHECK_CUDA(cudaGetLastError()); // проверка, не упало ли ядро
     }
 }
 
