@@ -30,6 +30,7 @@ class Tensor {
 
         void toHost(float* dst);
 
+        Tensor* add(const Tensor& other);
         // matmul
         Tensor* matmul(const Tensor& other);
         // relu

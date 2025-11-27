@@ -26,6 +26,14 @@ __global__ void relu_kernel(float* data, int size) {
     }
 }
 
+
+__global__ void add_kernel(float* A, float* B, float* C, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        C[idx] = A[idx] + B[idx];
+    }
+}
+
 __global__ void matmul_kernel(float* A, float* B, float* C, int M, int N, int K) {
     // вычисляем произведение матриц MxK and KxN
     // результирующая матрица MxN
@@ -139,8 +147,33 @@ void Tensor::toHost(float* dst) {
     }
 }
 
-// matmul
+// add
 
+Tensor* Tensor::add(const Tensor& other) {
+    if (cols_ != other.getCols() && rows_ != other.getRows()) {
+        throw std::runtime_error("addition shape mismatch!");
+    }
+    if (device_ != DeviceType::GPU || other.getDeviceType() != DeviceType::GPU) {
+        throw std::runtime_error("addition currently supprosts only on GPU!");
+    }
+
+    Tensor* C = new Tensor(rows_, cols_, DeviceType::GPU);
+    int ThreadsPerBlock = 256;
+    int blocksPerGrid = (size_ + ThreadsPerBlock - 1) / ThreadsPerBlock;
+
+
+    add_kernel<<<blocksPerGrid, ThreadsPerBlock>>>(
+        data_ptr,
+        other.getDataPtr(),
+        C->getDataPtr(),
+        size_
+    );
+    CHECK_CUDA(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaGetLastError());
+
+    return C;
+}
+// matmul
 Tensor* Tensor::matmul(const Tensor& other) {
     if (cols_ != other.getRows()) {
         throw std::runtime_error("Matmul shape mismatch!");
